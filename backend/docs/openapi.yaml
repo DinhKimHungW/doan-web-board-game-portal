@@ -1,0 +1,1330 @@
+openapi: 3.0.3
+info:
+  title: Board Game Portal API
+  description: |
+    Complete REST API for the Board Game Portal web application.
+
+    ## Authentication
+    Most endpoints require a JWT Bearer token in the Authorization header:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    Access tokens expire in 15 minutes. Use the `/auth/refresh` endpoint with your refresh token to get a new access token.
+
+    ## Rate Limiting
+    Not currently enforced, but planned for production.
+  version: 1.0.0
+  contact:
+    name: Board Game Portal Support
+    email: support@boardgameportal.example.com
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development
+  - url: https://your-production-domain.com/api/v1
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Users
+    description: User profile management
+  - name: Friends
+    description: Friend system
+  - name: Conversations
+    description: Messaging system
+  - name: Games
+    description: Game catalog
+  - name: Game Sessions
+    description: Game session management
+  - name: Rankings
+    description: Leaderboards
+  - name: Achievements
+    description: Achievement system
+  - name: Admin
+    description: Admin-only endpoints
+  - name: System
+    description: System health
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [USER, ADMIN]
+        avatar_url:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        theme_preference:
+          type: string
+          enum: [light, dark]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          example: tic-tac-toe
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [strategy, puzzle, arcade, creative]
+        default_rows:
+          type: integer
+          nullable: true
+        default_cols:
+          type: integer
+          nullable: true
+        default_time_limit:
+          type: integer
+          nullable: true
+        is_enabled:
+          type: boolean
+        config_json:
+          type: object
+          nullable: true
+        avg_rating:
+          type: number
+          format: float
+        review_count:
+          type: integer
+
+    GameSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        game_slug:
+          type: string
+        game_name:
+          type: string
+        mode:
+          type: string
+          enum: [vs_computer, solo]
+        status:
+          type: string
+          enum: [IN_PROGRESS, SAVED, FINISHED, ABANDONED]
+        score:
+          type: integer
+        result:
+          type: string
+          enum: [WIN, LOSE, DRAW]
+          nullable: true
+        timer_setting:
+          type: integer
+          nullable: true
+        elapsed_seconds:
+          type: integer
+        board_rows:
+          type: integer
+          nullable: true
+        board_cols:
+          type: integer
+          nullable: true
+        current_state_json:
+          type: object
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Achievement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        game_id:
+          type: string
+          format: uuid
+          nullable: true
+        game_slug:
+          type: string
+          nullable: true
+        game_name:
+          type: string
+          nullable: true
+        condition_json:
+          type: object
+        icon:
+          type: string
+          nullable: true
+
+    Friendship:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        requester_id:
+          type: string
+          format: uuid
+        receiver_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED]
+        created_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        sender_name:
+          type: string
+        content:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        user_name:
+          type: string
+        game_id:
+          type: string
+          format: uuid
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  # ── AUTH ──────────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  description: Must contain uppercase, lowercase, number, and special character
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          accessToken:
+                            type: string
+                          refreshToken:
+                            type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New tokens issued
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          accessToken:
+                            type: string
+                          refreshToken:
+                            type: string
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and revoke refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+
+  # ── USERS ─────────────────────────────────────────────────────────────────────
+  /users/search:
+    get:
+      tags: [Users]
+      summary: Search users by name or email
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          users:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /users/me:
+    patch:
+      tags: [Users]
+      summary: Update own profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                bio:
+                  type: string
+                avatar_url:
+                  type: string
+                  format: uri
+                theme_preference:
+                  type: string
+                  enum: [light, dark]
+      responses:
+        '200':
+          description: Profile updated
+
+  /users/me/password:
+    patch:
+      tags: [Users]
+      summary: Change own password
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword, confirmPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                confirmPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+
+  /users/me/achievements:
+    get:
+      tags: [Users, Achievements]
+      summary: Get current user's achievements
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User achievements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          achievements:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Achievement'
+
+  /users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user profile by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User profile
+        '404':
+          description: User not found
+
+  # ── FRIENDS ──────────────────────────────────────────────────────────────────
+  /friends:
+    get:
+      tags: [Friends]
+      summary: List accepted friends
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Friend list
+
+  /friends/{friendId}:
+    delete:
+      tags: [Friends]
+      summary: Remove a friend
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: friendId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend removed
+
+  /friend-requests:
+    get:
+      tags: [Friends]
+      summary: List pending friend requests (sent and received)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Friend requests list
+    post:
+      tags: [Friends]
+      summary: Send a friend request
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiverId]
+              properties:
+                receiverId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Friend request sent
+        '409':
+          description: Request already exists
+
+  /friend-requests/{id}/accept:
+    patch:
+      tags: [Friends]
+      summary: Accept a friend request
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend request accepted
+
+  /friend-requests/{id}/reject:
+    patch:
+      tags: [Friends]
+      summary: Reject a friend request
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Friend request rejected
+
+  # ── CONVERSATIONS ─────────────────────────────────────────────────────────────
+  /conversations:
+    get:
+      tags: [Conversations]
+      summary: List conversations for current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Conversations list with last message and unread count
+    post:
+      tags: [Conversations]
+      summary: Start a conversation with a friend
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Conversation created or existing returned
+
+  /conversations/{id}/messages:
+    get:
+      tags: [Conversations]
+      summary: Get messages in a conversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Messages list (returned in chronological order)
+    post:
+      tags: [Conversations]
+      summary: Send a message
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  maxLength: 5000
+      responses:
+        '201':
+          description: Message sent
+
+  /messages/{id}/read:
+    patch:
+      tags: [Conversations]
+      summary: Mark a message as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message marked as read
+
+  # ── GAMES ─────────────────────────────────────────────────────────────────────
+  /games:
+    get:
+      tags: [Games]
+      summary: List all enabled games with ratings
+      responses:
+        '200':
+          description: Games list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          games:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Game'
+
+  /games/{slug}:
+    get:
+      tags: [Games]
+      summary: Get game details by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+          example: tic-tac-toe
+      responses:
+        '200':
+          description: Game details
+        '404':
+          description: Game not found
+
+  /games/{slug}/reviews:
+    get:
+      tags: [Games]
+      summary: List reviews for a game
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Reviews list with optional my_review
+    post:
+      tags: [Games]
+      summary: Create or update your review for a game
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+                  maxLength: 1000
+      responses:
+        '200':
+          description: Review updated
+        '201':
+          description: Review created
+
+  /games/{slug}/reviews/{reviewId}:
+    patch:
+      tags: [Games]
+      summary: Update your own review
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: reviewId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+      responses:
+        '200':
+          description: Review updated
+
+  # ── GAME SESSIONS ─────────────────────────────────────────────────────────────
+  /game-sessions:
+    post:
+      tags: [Game Sessions]
+      summary: Start a new game session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameId]
+              properties:
+                gameId:
+                  type: string
+                  format: uuid
+                mode:
+                  type: string
+                  enum: [vs_computer, solo]
+                  default: solo
+                timerSetting:
+                  type: integer
+                  nullable: true
+                boardRows:
+                  type: integer
+                boardCols:
+                  type: integer
+      responses:
+        '201':
+          description: Session started
+    get:
+      tags: [Game Sessions]
+      summary: List user's game sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [IN_PROGRESS, SAVED, FINISHED, ABANDONED]
+      responses:
+        '200':
+          description: Sessions list
+
+  /game-sessions/{id}:
+    get:
+      tags: [Game Sessions]
+      summary: Get a specific game session
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session details
+
+  /game-sessions/{id}/state:
+    patch:
+      tags: [Game Sessions]
+      summary: Update game state (autosave)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentStateJson:
+                  type: object
+                score:
+                  type: integer
+                elapsedSeconds:
+                  type: integer
+      responses:
+        '200':
+          description: State updated
+
+  /game-sessions/{id}/save:
+    post:
+      tags: [Game Sessions]
+      summary: Save game to a named slot
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slotName]
+              properties:
+                slotName:
+                  type: string
+                  maxLength: 100
+      responses:
+        '201':
+          description: Game saved
+
+  /game-sessions/{id}/saves:
+    get:
+      tags: [Game Sessions]
+      summary: List saves for a session
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Saves list
+
+  /game-sessions/{id}/complete:
+    post:
+      tags: [Game Sessions]
+      summary: Complete a game session
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score, result]
+              properties:
+                score:
+                  type: integer
+                  minimum: 0
+                result:
+                  type: string
+                  enum: [WIN, LOSE, DRAW]
+      responses:
+        '200':
+          description: Session completed
+
+  # ── RANKINGS ─────────────────────────────────────────────────────────────────
+  /rankings:
+    get:
+      tags: [Rankings]
+      summary: Get leaderboard
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: game
+          schema:
+            type: string
+          description: Game slug (required for global and friends scope)
+        - in: query
+          name: scope
+          schema:
+            type: string
+            enum: [global, friends, self]
+            default: global
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Rankings
+
+  # ── ACHIEVEMENTS ──────────────────────────────────────────────────────────────
+  /achievements:
+    get:
+      tags: [Achievements]
+      summary: List all achievements
+      responses:
+        '200':
+          description: All achievements
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          achievements:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Achievement'
+
+  # ── ADMIN ─────────────────────────────────────────────────────────────────────
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List all users (admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Users list
+        '403':
+          description: Admin access required
+
+  /admin/users/{id}:
+    patch:
+      tags: [Admin]
+      summary: Update user (admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_active:
+                  type: boolean
+                role:
+                  type: string
+                  enum: [USER, ADMIN]
+                name:
+                  type: string
+      responses:
+        '200':
+          description: User updated
+
+  /admin/games:
+    get:
+      tags: [Admin]
+      summary: List all games including disabled (admin)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Games list
+
+  /admin/games/{id}:
+    patch:
+      tags: [Admin]
+      summary: Update game configuration (admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_enabled:
+                  type: boolean
+                name:
+                  type: string
+                description:
+                  type: string
+                default_time_limit:
+                  type: integer
+                config_json:
+                  type: object
+      responses:
+        '200':
+          description: Game updated
+
+  /admin/stats/overview:
+    get:
+      tags: [Admin]
+      summary: Get platform overview statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Overview stats including user counts, session counts, messages
+
+  /admin/stats/games:
+    get:
+      tags: [Admin]
+      summary: Get per-game statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Game stats with play counts and ratings
+
+  /admin/stats/users:
+    get:
+      tags: [Admin]
+      summary: Get user activity statistics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Top players and registration trends
+
+  # ── SYSTEM ────────────────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [System]
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: healthy
+                      timestamp:
+                        type: string
+                        format: date-time
+                      uptime:
+                        type: integer
+                      database:
+                        type: string
+                        example: connected
+        '503':
+          description: Service is unhealthy
